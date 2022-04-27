@@ -8,7 +8,7 @@ token octalDigit   { <[0 .. 7]> }
 token hexDigt      { <xdigit> }
 
 #token ident { <.letter> [ <.letter> | <.decimalDigit> | '_' ]* }
-token fullIdent { <ident> [ '.' <ident> ]* }
+token fullIdent { <ident>+ % \. }
 
 token messageName { <ident> }
 token enumName    { <ident> }
