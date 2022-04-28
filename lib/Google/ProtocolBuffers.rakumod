@@ -1,6 +1,7 @@
 #!/usr/bin/env raku
 unit grammar Google::ProtocolBuffers;
-# https://developers.google.com/protocol-buffers/docs/reference/proto3-spec
+
+token version  { proto<[23]> }
 
 token letter       { <alpha> }
 token decimalDigit { <digit> }
@@ -21,7 +22,7 @@ token rpcName     { <ident> }
 token messageType { '.'? [ <ident> '.' ]* <messageName> }
 token enumType    { '.'? [ <ident> '.' ]* <enumName>    }
 
-token intLit { <decimalLit> | <octalLit> | <hexLit> }
+token intLit     { <decimalLit> | <octalLit> | <hexLit> }
 token decimalLit { <[1 .. 9]> <decimalDigit>* }
 token octalLit   { 0 <octalDigit>*   }
 token hexLit     { 0 <[xX]> <hexDigt>+ }
@@ -46,8 +47,7 @@ token charEscape { \\ <[abfnrtv\\'"]> }
 token emptyStatement { \; }
 
 token constant { <fullIdent> | [ <[+-]> <intLit> ] | [ <[-+]> <floatLit> ] | <strLit> | <boolLit> }
-
-rule syntax { syntax '=' [\' proto3 \' | \" proto3 \" ] \; }
+rule syntax { syntax '=' [\' <version> \' | \" <version> \" ] \; }
 rule import { import [ weak | public ]? <strLit> \; }
 rule package { package <fullIdent> \; }
 rule option { option <optionName> '=' <constant> \; }
@@ -57,9 +57,9 @@ token type {
  < double float int32 int64 uint32 uint64 sint32 sint64 fixed32 fixed64 sfixed32 sfixed64 bool string bytes >
  | <messageType> | <enumType>
 }
-token fieldNumber { <intLit> }
+token fieldNumber { <intLit> <?{ 1 ≤ $<intLit> < 2**29 && $<intLit> == (19_000 .. 19_999).none }> }
  
-rule field { [repeated]? <type> <fieldName> '=' <fieldNumber> [ \[ ~ \] <fieldOptions> ]? \; }
+rule field {...}
 rule fieldOptions { <fieldOption>+ % \, }
 rule fieldOption  { <optionName> \= <constant> }
 
@@ -81,9 +81,9 @@ rule enumField { <ident> '=' '-'? <intLit> [ \[ ~ \] [ <enumValueOption>+ % \, ]
 rule enumValueOption { <optionName> '=' <constant> }
 
 rule message { message <messageName> <messageBody> }
-rule messageBody { \{ ~ \} [ <field> | <enum> | <message> | <option> | <oneof> | <mapField> | <reserved> | <emptyStatement> ]* }
+rule messageBody {...}
 
-rule service { service <serviceName> [ \{ ~ \} [ <option> | <rpc> | <emptyStatement> ]* ] }
+rule service {...}
 rule rpc {
   rpc <rpcName>
     [ \( ~ \) [ [stream]? <messageType> ] ]
@@ -93,6 +93,5 @@ rule rpc {
 }
 
 rule proto { <syntax> [ <import> | <package> | <option> | <topLevelDef> | <emptyStatement> ]* }
-rule topLevelDef { <message> | <enum> | <service> }
 
 rule TOP { <proto> }
