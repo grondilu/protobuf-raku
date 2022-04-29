@@ -1,6 +1,6 @@
 #!/usr/bin/env raku
-use Google::ProtocolBuffers;
-unit grammar Google::ProtocolBuffers::Proto2 is Google::ProtocolBuffers;
+use Google::ProtocolBuffers::Grammar;
+unit grammar Google::ProtocolBuffers::Proto2 is Google::ProtocolBuffers::Grammar;
 # https://developers.google.com/protocol-buffers/docs/reference/proto2-spec
 
 token version { proto2 }
@@ -33,4 +33,3 @@ rule stream {
 
 rule topLevelDef { <message> | <enum> | <extend> | <service> }
 
-rule TOP { <proto> }
