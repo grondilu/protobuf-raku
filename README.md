@@ -6,8 +6,10 @@ Google's protocol buffers in raku
 ```raku
 use Google::Protobuffers;
 
-my ProtoBuf $pb .= new:
-  q[syntax = "proto2"; message Test1 { optional int32 a = 1; }];
+my ProtoBuf $pb .= new: q:to/PROTO-END/;
+	syntax = "proto2";
+	message Test1 { optional int32 a = 1; };
+	PROTO-END
 
 # encode
 say $pb.Test1: a => 150; 
