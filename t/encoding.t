@@ -8,7 +8,7 @@ use Google::ProtocolBuffers::Proto2;
 
 
 for ^1_000_000_000 .pick(100) {
-  is $_, Google::ProtocolBuffers::decode(varint-encode($_), :varint), "$_ -> varint -> $_";
+  is $_, Varint.new(blob => Varint.new($_).blob).Int, "$_ -> varint -> $_";
 }
 
 

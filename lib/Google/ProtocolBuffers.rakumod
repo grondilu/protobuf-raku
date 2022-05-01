@@ -3,14 +3,30 @@ unit module Google::ProtocolBuffers;
 
 our proto decode($, *%params) {*}
 
-sub varint-encode(UInt $n is copy --> blob8) is export {
-  blob8.new: gather {
-    while $n ≥ 128 {
-      take ($n % 128) +| 128;
-      $n +>= 7;
+class Varint is export {
+
+  has blob8 $.blob;
+
+  multi method new(Channel $c) {
+    my @b;
+    until $c.closed {
+      @b.push: my $b = $c.receive;
+      return self.bless(:blob(blob8.new(@b))) unless $b +& 128;
     }
-    take $n;
+    die "channel unexpectedly closed";
   }
+  multi method new(UInt $n is copy) {
+    self.bless:
+      blob => blob8.new:
+      gather {
+	while $n ≥ 128 {
+	  take ($n % 128) +| 128;
+	  $n +>= 7;
+	}
+	take $n;
+      }
+  }
+  method Int { [+] ($!blob.list X[+&] 127) Z[+<] (0, 7 ... *) }
 }
 
 multi decode(blob8 $b, *%params) {
@@ -19,26 +35,17 @@ multi decode(blob8 $b, *%params) {
   $c.send($_) for $b;
   samewith $c, |%params;
 }
-multi decode(Channel $c, :$varint!) {
-  my $sum;
-  gather until $c.closed {
-    my $b = $c.receive;
-    $sum += ($b +& 127) +< (7*$++); 
-    return $sum unless $b +& 128;
-  }
-  die "channel was unexpectedly closed";
-}
 multi decode(Channel $c) {
   my UInt ($sum, $i);
   gather until $c.closed {
-    my $tag = samewith $c, :varint;
+    my $tag = Varint.new($c).Int;
     my ($field, $wire-type) = $tag +> 3, $tag +& 7;
     take $field;
     given $wire-type {
-      when 0 { take samewith $c, :varint }
+      when 0 { take Varint.new($c).Int }
       when 1 { take ($c.receive xx 8).reduce: 256 * * + * }
       when 2 {
-	my $length = samewith $c, :varint;
+	my $length = Varint.new($c).Int;
 	take blob8.new: $c.receive xx $length;
       }
       when 3|4 { !!! "deprecated" }
@@ -83,10 +90,10 @@ our class Encoder {
   has %.definitions;
 
   multi method encode(Int $value, Str :$type where /^u?int[32|64]|bool|enum$/) {
-    varint-encode $value;
+    Varint.new($value).blob;
   }
   multi method encode(Str $value) {
-    varint-encode($value.chars) ~ $value.encode;
+    Varint.new($value).blob ~ $value.encode;
   }
   method TOP($/) { make $<proto>.made }
   method proto($/) {
@@ -160,7 +167,7 @@ class ProtoBuf is export {
                 if $number ~~ /<digit>+/ {
                   if %definition<messageBody>{$number}:exists {
                     my $type = %definition<messageBody>{$number}<type>; 
-                    varint-encode(tag $number, wire-type $type) ~
+                    Varint.new(tag $number, wire-type $type).blob ~
                     Encoder.encode(.value, :$type);
                   } else { !!! "unable to find field" }
                 } else { !!! "unexpected number format" }
