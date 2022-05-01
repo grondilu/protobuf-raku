@@ -93,7 +93,7 @@ our class Encoder {
     Varint.new($value).blob;
   }
   multi method encode(Str $value) {
-    Varint.new($value).blob ~ $value.encode;
+    Varint.new($value.chars).blob ~ $value.encode;
   }
   method TOP($/) { make $<proto>.made }
   method proto($/) {
