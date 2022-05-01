@@ -11,13 +11,13 @@ token hexDigt      { <xdigit> }
 #token ident { <.letter> [ <.letter> | <.decimalDigit> | '_' ]* }
 token fullIdent { <ident>+ % \. }
 
-token messageName { <ident> }
-token enumName    { <ident> }
-token fieldName   { <ident> }
-token oneofName   { <ident> }
-token mapName     { <ident> }
-token serviceName { <ident> }
-token rpcName     { <ident> }
+token messageName { <.ident> }
+token enumName    { <.ident> }
+token fieldName   { <.ident> }
+token oneofName   { <.ident> }
+token mapName     { <.ident> }
+token serviceName { <.ident> }
+token rpcName     { <.ident> }
 
 token messageType { '.'? [ <ident> '.' ]* <messageName> }
 token enumType    { '.'? [ <ident> '.' ]* <enumName>    }
@@ -57,7 +57,7 @@ token type {
  < double float int32 int64 uint32 uint64 sint32 sint64 fixed32 fixed64 sfixed32 sfixed64 bool string bytes >
  | <messageType> | <enumType>
 }
-token fieldNumber { <intLit> <?{ 1 ≤ $<intLit> < 2**29 && $<intLit> == (19_000 .. 19_999).none }> }
+token fieldNumber { <.intLit> <?{ 1 ≤ $/ < 2**29 && $/ == (19_000 .. 19_999).none }> }
  
 rule field {...}
 rule fieldOptions { <fieldOption>+ % \, }
