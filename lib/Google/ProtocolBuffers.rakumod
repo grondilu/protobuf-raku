@@ -87,6 +87,7 @@ our class Encoder {
   zigzag encoding: sint32 and sint64 types use zigzag encoding.
   }}}
 
+  has Str $.package;
   multi method encode(Int $value, Str :$type where /^u?int[32|64]|bool|enum$/) {
     Varint.new($value).blob;
   }
@@ -102,7 +103,13 @@ our class Encoder {
   }
   method syntax($/) { make ~$<version> }
   method message($/) {
-    make Pair.new: ~$<messageName>, my % = type => 'message', body => $<messageBody>.made
+    make Pair.new: $<messageName>.made, my % = type => 'message', body => $<messageBody>.made
+  }
+  method package($/) {
+    $!package = (~$<fullIdent>).subst('.', '-', :g);
+  }
+  method messageName($/) {
+    make ($!package ?? "$!package-" !! '') ~ $/
   }
   method messageBody($/) {
     make reduce {$^a.append($^b.pairs)}, {}, |$<field>».made
@@ -145,11 +152,11 @@ class ProtoBuf is export {
     use Google::ProtocolBuffers::Proto3;
     if
       Google::ProtocolBuffers::Proto3.parse:
-      $!proto-spec, actions => Encoder
+      $!proto-spec, actions => Encoder.new
     { %!definitions = $/.made<definitions> }
     elsif
       Google::ProtocolBuffers::Proto2.parse:
-      $!proto-spec, actions => Encoder
+      $!proto-spec, actions => Encoder.new
     { %!definitions = $/.made<definitions> }
     else { die "unknown proto spec format" }
   }
