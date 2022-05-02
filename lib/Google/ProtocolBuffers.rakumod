@@ -88,21 +88,24 @@ our class Encoder {
   }}}
 
   has Str $.package;
-  multi method encode(Int $value, Str :$type where /^u?int[32|64]|bool|enum$/) {
+  our proto sub encode(| --> blob8) {*}
+  multi encode(Int $value, Str :$type where /^u?int[32|64]|bool|enum$/) {
     Varint.new($value).blob;
   }
-  multi method encode(Str $value) {
+  multi encode(Str $value) {
     Varint.new($value.chars).blob ~ $value.encode;
   }
+
   method TOP($/) { make $<proto>.made }
   method proto($/) {
     make { syntax => $<syntax>.made, definitions => Hash.new: $<topLevelDef>».made }
   }
-  method topLevelDef($/) {
-    with $<message> { make .made }
-    with $<enum>    { make .made }
-  }
   method syntax($/) { make ~$<version> }
+  method topLevelDef($/) {
+    with $<message>  { make .made }
+    with $<enum>     { make .made }
+    with $<mapField> { ...        }
+  }
   
   # messages
   method message($/) {
@@ -188,7 +191,7 @@ class ProtoBuf is export {
                   if %definition<body>{$number}:exists {
                     my $type = %definition<body>{$number}<type>; 
                     Varint.new(tag $number, wire-type $type).blob ~
-                    Encoder.encode(.value, :$type);
+                    Encoder::encode(.value, :$type);
                   } else { !!! "unable to find field" }
                 } else { !!! "unexpected number format" }
               } else { !!! "unknown field \"{.key}\" for message '$method'" }
