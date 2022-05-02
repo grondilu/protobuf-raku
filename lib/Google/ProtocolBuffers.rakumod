@@ -100,8 +100,11 @@ our class Encoder {
   }
   method topLevelDef($/) {
     with $<message> { make .made }
+    with $<enum>    { make .made }
   }
   method syntax($/) { make ~$<version> }
+  
+  # messages
   method message($/) {
     make Pair.new: $<messageName>.made, my % = type => 'message', body => $<messageBody>.made
   }
@@ -122,6 +125,17 @@ our class Encoder {
     make { $number => { :$label, :$name, :$type }, $name => $number }
   }
   method fieldNumber($/) { make +$/ }
+
+  # enums
+  method enum($/) {
+    make Pair.new: $<enumName>.made, $<enumBody>.made
+  }
+  method enumName($/) {
+    make ($!package ?? "$!package-" !! '') ~ $/
+  }
+  method enumBody($/) { make Hash.new: $<enumField>».made }
+  method enumField($/) { make Pair.new: ~$<ident>, +$<intLit> }
+
 }
 
 our package ZigZag {
