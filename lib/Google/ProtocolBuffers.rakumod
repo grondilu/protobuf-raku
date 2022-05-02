@@ -87,8 +87,6 @@ our class Encoder {
   zigzag encoding: sint32 and sint64 types use zigzag encoding.
   }}}
 
-  has %.definitions;
-
   multi method encode(Int $value, Str :$type where /^u?int[32|64]|bool|enum$/) {
     Varint.new($value).blob;
   }
@@ -97,16 +95,17 @@ our class Encoder {
   }
   method TOP($/) { make $<proto>.made }
   method proto($/) {
-    make { syntax => $<syntax>.made, :%!definitions }
+    make { syntax => $<syntax>.made, definitions => Hash.new: $<topLevelDef>».made }
+  }
+  method topLevelDef($/) {
+    with $<message> { make .made }
   }
   method syntax($/) { make ~$<version> }
   method message($/) {
-    %!definitions{$<messageName>} = {
-      type => "message", messageBody => $<messageBody>.made
-    }
+    make Pair.new: ~$<messageName>, my % = type => 'message', body => $<messageBody>.made
   }
   method messageBody($/) {
-    make reduce {$^a.append($^b.pairs)}, Hash.new, |$<field>».made
+    make reduce {$^a.append($^b.pairs)}, {}, |$<field>».made
   }
   method field($/) {
     my $label = ~$<label>;
@@ -146,11 +145,11 @@ class ProtoBuf is export {
     use Google::ProtocolBuffers::Proto3;
     if
       Google::ProtocolBuffers::Proto3.parse:
-      $!proto-spec, actions => Encoder.new
+      $!proto-spec, actions => Encoder
     { %!definitions = $/.made<definitions> }
     elsif
       Google::ProtocolBuffers::Proto2.parse:
-      $!proto-spec, actions => Encoder.new
+      $!proto-spec, actions => Encoder
     { %!definitions = $/.made<definitions> }
     else { die "unknown proto spec format" }
   }
@@ -162,11 +161,11 @@ class ProtoBuf is export {
         when "message" {
 	  return [~] %params.pairs.map:
             {
-	      if %definition<messageBody>{.key}:exists {
-		my $number = +%definition<messageBody>{.key};
+	      if %definition<body>{.key}:exists {
+		my $number = +%definition<body>{.key};
                 if $number ~~ /<digit>+/ {
-                  if %definition<messageBody>{$number}:exists {
-                    my $type = %definition<messageBody>{$number}<type>; 
+                  if %definition<body>{$number}:exists {
+                    my $type = %definition<body>{$number}<type>; 
                     Varint.new(tag $number, wire-type $type).blob ~
                     Encoder.encode(.value, :$type);
                   } else { !!! "unable to find field" }
