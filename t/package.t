@@ -1,11 +1,7 @@
 #!/usr/bin/env raku
 # https://developers.google.com/protocol-buffers/docs/encoding
 use Test;
-
 use Google::ProtocolBuffers;
-use Google::ProtocolBuffers::Proto2;
-#use Google::ProtocolBuffers::Encoder;
-
 
 my ProtoBuf $pb .=new: q:to/PROTO-END/;
 	syntax = "proto2";

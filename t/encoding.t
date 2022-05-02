@@ -1,11 +1,7 @@
 #!/usr/bin/env raku
 # https://developers.google.com/protocol-buffers/docs/encoding
 use Test;
-
 use Google::ProtocolBuffers;
-use Google::ProtocolBuffers::Proto2;
-#use Google::ProtocolBuffers::Encoder;
-
 
 for ^1_000_000_000 .pick(100) {
   is $_, Varint.new(blob => Varint.new($_).blob).Int, "$_ -> varint -> $_";

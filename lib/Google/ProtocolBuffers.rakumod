@@ -101,6 +101,8 @@ our class Encoder {
     make { syntax => $<syntax>.made, definitions => Hash.new: $<topLevelDef>».made }
   }
   method syntax($/) { make ~$<version> }
+  method import($/) {...}
+
   method topLevelDef($/) {
     with $<message>  { make .made }
     with $<enum>     { make .made }
@@ -118,10 +120,10 @@ our class Encoder {
     make ($!package ?? "$!package-" !! '') ~ $/
   }
   method messageBody($/) {
-    make reduce {$^a.append($^b.pairs)}, {}, |$<field>».made
+    make reduce {$^a.append($^b.pairs)}, {}, |$<field>».made, |$<message>».made
   }
   method field($/) {
-    my $label = ~$<label>;
+    my $label = ~($<label> // '');
     my $name = ~$<fieldName>;
     my $number = +$<fieldNumber>;
     my $type = ~$<type>;
@@ -131,7 +133,7 @@ our class Encoder {
 
   # enums
   method enum($/) {
-    make Pair.new: $<enumName>.made, $<enumBody>.made
+    make Pair.new: $<enumName>.made, Hash.new: (type => "enum", body => $<enumBody>.made)
   }
   method enumName($/) {
     make ($!package ?? "$!package-" !! '') ~ $/
@@ -165,20 +167,15 @@ class ProtoBuf is export {
  
   multi method new(Str $proto-spec) { self.bless: :$proto-spec }
   submethod TWEAK {
-    use Google::ProtocolBuffers::Proto2;
-    use Google::ProtocolBuffers::Proto3;
+    use Google::ProtocolBuffers::Grammar;
     if
-      Google::ProtocolBuffers::Proto3.parse:
-      $!proto-spec, actions => Encoder.new
-    { %!definitions = $/.made<definitions> }
-    elsif
-      Google::ProtocolBuffers::Proto2.parse:
+      Google::ProtocolBuffers::Grammar.parse:
       $!proto-spec, actions => Encoder.new
     { %!definitions = $/.made<definitions> }
     else { die "unknown proto spec format" }
   }
   
-  multi method FALLBACK(Str $method, *%params) {
+  multi method FALLBACK(Str $method, **@args, *%params) {
     if %!definitions{$method}:exists {
       my %definition = %!definitions{$method};
       given %definition<type> {
