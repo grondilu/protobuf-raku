@@ -1,7 +1,22 @@
 #!/usr/bin/env raku
 unit grammar Google::ProtocolBuffers::Grammar;
 
-token version  { proto<[23]> }
+rule TOP {
+  :our $*VERSION;
+  <proto>
+}
+rule proto {
+  <syntax> [
+    | <import>
+    | <package>
+    | <option>
+    | <topLevelDef>
+    | <emptyStatement> 
+  ]*
+}
+rule syntax { syntax '=' [\' <version> \' | \" <version> \" ] \; }
+
+token version  { proto(<[23]>) { $*VERSION = +$/[0] } }
 
 token letter       { <alpha> }
 token decimalDigit { <digit> }
@@ -18,6 +33,14 @@ token oneofName   { <.ident> }
 token mapName     { <.ident> }
 token serviceName { <.ident> }
 token rpcName     { <.ident> }
+token streamName  { <.ident> }
+token groupName   { <capitalLetter> [ <letter> | <decimalDigit> | '_' ]* }
+
+token capitalLetter { <alpha> }
+token label {
+   [ required | optional | repeated ]
+  { die "labels are only defined for proto2" unless $*VERSION == 2 }
+}
 
 token messageType { '.'? [ <ident> '.' ]* <messageName> }
 token enumType    { '.'? [ <ident> '.' ]* <enumName>    }
@@ -47,7 +70,6 @@ token charEscape { \\ <[abfnrtv\\'"]> }
 token emptyStatement { \; }
 
 token constant { <fullIdent> | [ <[+-]> <intLit> ] | [ <[-+]> <floatLit> ] | <strLit> | <boolLit> }
-rule syntax { syntax '=' [\' <version> \' | \" <version> \" ] \; }
 rule import { import [ weak | public ]? <strLit> \; }
 rule package { package <fullIdent> \; }
 rule option { option <optionName> '=' <constant> \; }
@@ -59,7 +81,12 @@ token type {
 }
 token fieldNumber { <.intLit> <?{ 1 ≤ $/ < 2**29 && $/ == (19_000 .. 19_999).none }> }
  
-rule field {...}
+rule field {
+  [
+    | <?{ $*VERSION == 2 }> <label>
+    | <?{ $*VERSION == 3 }> [repeated]?
+  ] <type> <fieldName> '=' <fieldNumber> [ \[ ~ \] <fieldOptions> ]? \; 
+}
 rule fieldOptions { <fieldOption>+ % \, }
 rule fieldOption  { <optionName> \= <constant> }
 
@@ -81,9 +108,45 @@ rule enumField { <ident> '=' '-'? <intLit> [ \[ ~ \] [ <enumValueOption>+ % \, ]
 rule enumValueOption { <optionName> '=' <constant> }
 
 rule message { message <messageName> <messageBody> }
-rule messageBody {...}
+rule messageBody {
+  \{ ~ \} [
+  | <field> | <enum> | <message>
+  | <?{ $*VERSION == 2 }> [ <extend> | <extensions> | <group> ]
+  | <option> | <oneof> | <mapField> | <reserved> | <emptyStatement> ]*
+}
 
-rule service {...}
+rule service {
+  service <serviceName> [
+  \{ ~ \} [
+    | <option> | <rpc>
+    | <?{ $*VERSION == 2 }> <stream>
+    | <emptyStatement> ]*
+  ]
+}
+
+rule stream {
+  stream <streamName>
+  [ '(' ~ ')' <messageType> ** 2 % ',' ]
+  [[ '{' ~ '}' [ <option> | <emptyStatement> ]* ]? | ';' ]?
+  { die "stream are only defined in proto2" unless $*VERSION == 2 }
+}
+rule extensions {
+  extensions <ranges> \;
+  { die "extensions are only defined in proto2" unless $*VERSION == 2 }
+}
+rule extend {
+  extend <messageType> '{' ~ '}' [ <field> | <group> | <emptyStatement> ]*
+  { die "extensions are only defined in proto2" unless $*VERSION == 2 }
+}
+
+rule group {
+  <label> group <groupName> '=' <fieldNumber> <messageBody>
+  {
+    die "groups are only defined in proto2" unless $*VERSION == 2;
+    warn "groups are deprecated";
+  }
+}
+
 rule rpc {
   rpc <rpcName>
     [ \( ~ \) [ [stream]? <messageType> ] ]
@@ -92,6 +155,10 @@ rule rpc {
       [ [ \{ ~ \} [ <option> | <emptyStatement> ]? ]? | \; ]?
 }
 
-rule proto { <syntax> [ <import> | <package> | <option> | <topLevelDef> | <emptyStatement> ]* }
+rule topLevelDef {
+  <message> | <enum>
+  | <?{ $*VERSION == 2 }> <extend>
+  | <service>
+}
 
-rule TOP { <proto> }
+
