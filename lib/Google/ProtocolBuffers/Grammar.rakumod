@@ -2,7 +2,7 @@
 unit grammar Google::ProtocolBuffers::Grammar;
 
 rule TOP {
-  :our $*VERSION;
+  :my UInt $*VERSION;
   <proto>
 }
 rule proto {
@@ -14,9 +14,9 @@ rule proto {
     | <emptyStatement> 
   ]*
 }
-rule syntax { syntax '=' [\' <version> \' | \" <version> \" ] \; }
+rule syntax { syntax '=' (<['"]>) ~ $0 <version> \; }
 
-token version  { proto(<[23]>) { $*VERSION = +$/[0] } }
+token version  { proto(<[23]>) { $*VERSION = +$0 } }
 
 token letter       { <alpha> }
 token decimalDigit { <digit> }
