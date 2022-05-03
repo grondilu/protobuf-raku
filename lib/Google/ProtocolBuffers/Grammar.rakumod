@@ -36,7 +36,7 @@ token rpcName     { <.ident> }
 token streamName  { <.ident> }
 token groupName   { <capitalLetter> [ <letter> | <decimalDigit> | '_' ]* }
 
-token capitalLetter { <alpha> }
+token capitalLetter { <upper> }
 token label {
    [ required | optional | repeated ]
   { die "labels are only defined for proto2" unless $*VERSION == 2 }
