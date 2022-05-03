@@ -14,9 +14,9 @@ given ProtoBuf.new: q:to/PROTO-END/
 	}
 	PROTO-END
 {
-  is .definitions<EnumAllowingAlias><UNKNOWN>, 0;
-  is .definitions<EnumAllowingAlias><STARTED>, 1;
-  is .definitions<EnumAllowingAlias><RUNNING>, 2;
+  is .definitions<EnumAllowingAlias><body><UNKNOWN>, 0;
+  is .definitions<EnumAllowingAlias><body><STARTED>, 1;
+  is .definitions<EnumAllowingAlias><body><RUNNING>, 2;
 }
 
 done-testing;

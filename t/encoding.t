@@ -3,7 +3,7 @@
 use Test;
 use Google::ProtocolBuffers;
 
-for ^1_000_000_000 .pick(100) {
+for ^1_000_000_000_000 .pick(10) {
   is $_, Varint.new(blob => Varint.new($_).blob).Int, "$_ -> varint -> $_";
 }
 
@@ -13,13 +13,12 @@ my ($field, $b) = Google::ProtocolBuffers::decode blob8.new:
 is $field, 2, 'string example - field';
 is $b.decode('ascii'), 'testing', 'string example - string';
 
-my ProtoBuf $pb .= new:
-  q[syntax = "proto2"; message Test1 { optional int32 a = 1; }]
-;
-
-is $pb.Test1(a => 150), blob8.new(8, 150, 1);
-
 done-testing;
+
+given ProtoBuf.new: q[syntax = "proto3"; message Msg { int32 i = 1; }] {
+  my $i = ^100 .pick;
+  say .Msg: :$i
+}
 
 =finish
 
