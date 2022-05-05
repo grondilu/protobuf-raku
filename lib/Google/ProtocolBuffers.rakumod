@@ -101,9 +101,26 @@ our class Encoder {
   }
   
   # messages
+  class Message {
+    has %.structure;
+    has %!index;
+    submethod TWEAK { %!index{.value.name} = .key for %!structure }
+    method AT-KEY(Str $key) {
+      die "unknown field $key" unless self.EXISTS-KEY($key);
+      %!structure{%!index{$key}}
+    }
+    method EXISTS-KEY(Str $key) { %!index{$key}:exists }
+    method encode {
+      [~] gather for %!structure {
+        die "uninitialized field {.key}" unless .value.defined;
+        take .value.encode;
+      }
+    }
+  }
   method message($/) {
+    my $body = $<messageBody>.made;
     make %!definitions{$<messageName>.made} =
-      Hash.new: (type => 'message', body => $<messageBody>.made);
+      Message.new: structure => $<messageBody>.made;
   }
   method package($/) {
     $!package = (~$<fullIdent>).subst('.', '-', :g);
@@ -112,17 +129,48 @@ our class Encoder {
     make ($!package ?? "$!package-" !! '') ~ $/
   }
   method messageBody($/) {
-    make reduce {$^a.append($^b.pairs)}, {}, |$<field>».made, |$<message>».made
+    my %h;
+    for |$<field>».made -> $f {
+      %h{$f.number} = $f;
+    }
+    make %h;
   }
   method field($/) {
-    my $label = $<label> ?? ~$<label> !! Empty;
+    class Field {
+      has Str ($.label, $.name);
+      has UInt $.number;
+      has $.type;
+      has $.value handles <defined>;
+      method set($value) {
+        if $!type ~~ Str&/^[u|s]?int[32|64]$/ && $value !~~ Int
+          or $!type ~~ "string" && $value !~~ Str
+          or $!type ~~ Message && $value !~~ Message
+	{ die "type mismatch" }
+	else { $!value = $value }
+      }
+      method encode returns blob8 {
+        given $!type {
+	  when Str&/ [u|s]?int[32|64] | bool | enum / {
+            return Varint.new($!number +< 3).blob ~ Varint.new($!value).blob
+          }
+          when "string"|Message {
+            my $payload = $!value.encode;
+            return Varint.new($!number +< 3 +| 2).blob ~
+            Varint.new($payload.elems).blob ~ $payload
+          }
+          default {...}
+        }
+      }
+    }
+    my $label = $<label> ?? ~$<label> !! Str;
     my $name = ~$<fieldName>;
     my $number = +$<fieldNumber>;
-    my $type = ~$<type>;
-    make {
-      $number => Hash.new( (($label andthen :$label), :$name, :$type) ),
-      $name => $number
+    my $type = do given ~$<type> {
+      when "int32" { $_ }
+      when "string" { $_ }
+      when %!definitions{$_}:exists { %!definitions{$_}.WHAT }
     }
+    make Field.new: :$label, :$number, :$name, :$type;
   }
   method fieldNumber($/) { make +$/ }
 
@@ -130,12 +178,12 @@ our class Encoder {
 
   # enums
   method enum($/) {
-    make %!definitions{$<enumName>.made} = Hash.new: (type => "enum", body => $<enumBody>.made)
+    make %!definitions{$<enumName>.made} = %(type => "enum", body => $<enumBody>.made)
   }
   method enumName($/) {
     make ($!package ?? "$!package-" !! '') ~ $/
   }
-  method enumBody($/) { make Hash.new: $<enumField>».made }
+  method enumBody($/) { make hash $<enumField>».made }
   method enumField($/) { make Pair.new: ~$<ident>, +$<intLit> }
 
 }
@@ -179,31 +227,13 @@ class ProtoBuf is export {
       when / s?fixed64 | double /             { return 1 }
       when / s?fixed32 | float /              { return 5 }
       when / string / or
-	self{$_}:exists && self{$_}<type> eq 'message' { return 2 }
+	self{$_}:exists && self{$_}<type> eq 'message'
+					      { return 2 }
       default { !!! "unkown type $_" }
     }
   }
-  multi method FALLBACK(Str $ where /^u?int[32|64]$/, UInt $value) { Varint.new($value).blob }
-  multi method FALLBACK('string', Str $str) { Varint.new($str.chars).blob ~ $str.encode; }
-  multi method FALLBACK(Str $method where (%!definitions{$method}:exists), *%params) {
-    my %definition = self{$method}; 
-    given %definition<type> {
-      when "message" {
-	return %params.pairs.map:
-	{
-	  if %definition<body>{.key}:exists {
-	    my $number = +%definition<body>{.key};
-	    if $number ~~ /<digit>+/ {
-	      if my $definition = %definition<body>{$number} {
-		my $type = $definition<type>; 
-		.key => Varint.new(tag $number, wire-type $type).blob ~
-                samewith $type, .value;
-	      } else { !!! "unable to find field" }
-	    } else { !!! "unexpected number format" }
-	  } else { !!! "unknown field \"{.key}\" for message '$method'" }
-	}
-      }
-      default { !!! "$_ NYI" }
-    }
-  }
+  our proto encode($type, $ --> blob8) {*}
+  multi encode(Str $ where /^u?int[32|64]$/, UInt $value) { Varint.new($value).blob }
+  multi encode('string', Str $str) { Varint.new($str.chars).blob ~ $str.encode; }
+
 }
