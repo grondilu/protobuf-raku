@@ -120,7 +120,7 @@ our class Encoder {
       die "unknow field $method" unless self{$method}:exists;
       my $field = self{$method};
       Proxy.new:
-        FETCH => method { $field },
+        FETCH => method { $field.value },
         STORE => method ($value) { $field.set: $value }
     }
   }
