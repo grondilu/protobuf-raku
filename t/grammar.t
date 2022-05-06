@@ -5,11 +5,11 @@ use Google::ProtocolBuffers::Grammar;
 
 constant conformance-proto = "conformance.proto".IO.slurp;
 
-ok Google::ProtocolBuffers::Grammar.parse(
+say #Google::ProtocolBuffers::Grammar.parse(
   conformance-proto
-  .subst(/^\n/, '', :g)
+  .subst(/^\n+/, '', :g)
   .subst(/'//' \N*? \n/, '', :g)
-), "parsing conformance.proto";
+#), "parsing conformance.proto";
 ;
 
 done-testing;

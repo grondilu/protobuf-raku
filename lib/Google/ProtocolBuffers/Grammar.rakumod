@@ -3,7 +3,7 @@ unit grammar Google::ProtocolBuffers::Grammar;
 
 rule TOP {
   :my UInt $*VERSION;
-  \n* <proto>
+  <proto>
 }
 rule proto {
   <syntax> [
