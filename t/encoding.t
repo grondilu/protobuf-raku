@@ -29,10 +29,19 @@ my $i = ^100 .pick;
 my $msg = pb.definitions<Msg>;
 my $msg2 = pb.definitions<Msg2>;
 
-$msg.i = 57;
-$msg.txt = "hello";
-$msg2.j = 91;
-$msg.m = $msg2;
+lives-ok {
+  $msg.i = 57;
+  $msg.txt = "hello";
+  $msg2.j = 91;
+  $msg.m = $msg2;
+}, "setting fields with correct types";
+
+dies-ok {
+  $msg.i = "foo";
+  $msg.txt = 35;
+  $msg2.j = "bar";
+  $msg.m = pi;
+}, "dying when setting fields with in-correct types";
 
 lives-ok { $msg2.encode }, "encoding inner message";
 lives-ok { $msg.encode }, "encoding outer message";
