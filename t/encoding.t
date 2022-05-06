@@ -13,7 +13,8 @@ is $field, 2, 'string example - field';
 is $b.decode('ascii'), 'testing', 'string example - string';
 
 
-constant pb = ProtoBuf.new: q[syntax = "proto3";
+constant pb = ProtoBuf.new: q:to/PROTO-END/;
+syntax = "proto3";
 message Msg {
   int32 i = 1;
   string txt = 2;
@@ -22,16 +23,16 @@ message Msg {
   }
   Msg2 m = 3;
 }
-];
+PROTO-END
 
 my $i = ^100 .pick;
 my $msg = pb.definitions<Msg>;
 my $msg2 = pb.definitions<Msg2>;
 
-$msg<i>.set(53);
-$msg<txt>.set("hello");
-$msg2<j>.set: 577;
-$msg<m>.set: $msg2;
+$msg.i = 57;
+$msg.txt = "hello";
+$msg2.j = 91;
+$msg.m = $msg2;
 
 lives-ok { $msg2.encode }, "encoding inner message";
 lives-ok { $msg.encode }, "encoding outer message";

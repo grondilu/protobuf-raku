@@ -116,6 +116,13 @@ our class Encoder {
         take .value.encode;
       }
     }
+    method FALLBACK(Str $method) is rw {
+      die "unknow field $method" unless self{$method}:exists;
+      my $field = self{$method};
+      Proxy.new:
+        FETCH => method { $field },
+        STORE => method ($value) { $field.set: $value }
+    }
   }
   method message($/) {
     my $body = $<messageBody>.made;
