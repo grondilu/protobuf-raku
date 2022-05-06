@@ -3,7 +3,7 @@ unit grammar Google::ProtocolBuffers::Grammar;
 
 rule TOP {
   :my UInt $*VERSION;
-  <proto>
+  \n* <proto>
 }
 rule proto {
   <syntax> [
@@ -60,7 +60,7 @@ token exponent { <[eE]> <[+-]> <decimals> }
 
 token boolLit  { true | false }
 
-regex strLit { [ \' <charValue>* \' || \" <charValue>* \" ] }
+regex strLit { (<['"]>) ~ $0 <.charValue>* }
 
 token charValue  { <hexEscape> | <octEscape> | <charEscape> | <-[\0\n\\]> }
 token hexEscape  { \\ <[xX]> <hexDigit> ** 2 }
