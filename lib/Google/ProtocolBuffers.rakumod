@@ -55,6 +55,56 @@ multi decode(Channel $c) {
   }
 }
 
+class Message {
+  has %.structure;
+  has %!index;
+  submethod TWEAK { %!index{.value.name} = .key for %!structure }
+  method AT-KEY(Str $key) {
+    die "unknown field $key" unless self.EXISTS-KEY($key);
+    %!structure{%!index{$key}}
+  }
+  method EXISTS-KEY(Str $key) { %!index{$key}:exists }
+  method encode {
+    [~] gather for %!structure {
+      die "uninitialized field {.key}" unless .value.defined;
+      take .value.encode;
+    }
+  }
+  method FALLBACK(Str $method where (self{$method}:exists)) is rw {
+    my $field = self{$method};
+    Proxy.new:
+      FETCH => method { $field.value },
+      STORE => method ($value) { $field.set: $value }
+  }
+}
+
+class Field {
+  has Str ($.label, $.name);
+  has UInt $.number;
+  has $.type;
+  has $.value handles <defined>;
+  method set($value) {
+    if $!type ~~ Str&/^[u|s]?int[32|64]$/ && $value !~~ Int
+      or $!type ~~ "string" && $value !~~ Str
+	or $!type ~~ Message && $value !~~ Message
+	{ die "type mismatch" }
+    else { $!value = $value }
+  }
+  method encode returns blob8 {
+    given $!type {
+      when Str&/ [u|s]?int[32|64] | bool | enum / {
+	return Varint.new($!number +< 3).blob ~ Varint.new($!value).blob
+      }
+      when "string"|Message {
+	my $payload = $!value.encode;
+	return Varint.new($!number +< 3 +| 2).blob ~
+	  Varint.new($payload.elems).blob ~ $payload
+      }
+      default {...}
+    }
+  }
+}
+
 our class Encoder {
   #`{{{ CHEATSHEET from 
   # https://developers.google.com/protocol-buffers/docs/encoding
@@ -101,29 +151,6 @@ our class Encoder {
   }
   
   # messages
-  class Message {
-    has %.structure;
-    has %!index;
-    submethod TWEAK { %!index{.value.name} = .key for %!structure }
-    method AT-KEY(Str $key) {
-      die "unknown field $key" unless self.EXISTS-KEY($key);
-      %!structure{%!index{$key}}
-    }
-    method EXISTS-KEY(Str $key) { %!index{$key}:exists }
-    method encode {
-      [~] gather for %!structure {
-        die "uninitialized field {.key}" unless .value.defined;
-        take .value.encode;
-      }
-    }
-    method FALLBACK(Str $method) is rw {
-      die "unknow field $method" unless self{$method}:exists;
-      my $field = self{$method};
-      Proxy.new:
-        FETCH => method { $field.value },
-        STORE => method ($value) { $field.set: $value }
-    }
-  }
   method message($/) {
     my $body = $<messageBody>.made;
     make %!definitions{$<messageName>.made} =
@@ -143,32 +170,6 @@ our class Encoder {
     make %h;
   }
   method field($/) {
-    class Field {
-      has Str ($.label, $.name);
-      has UInt $.number;
-      has $.type;
-      has $.value handles <defined>;
-      method set($value) {
-        if $!type ~~ Str&/^[u|s]?int[32|64]$/ && $value !~~ Int
-          or $!type ~~ "string" && $value !~~ Str
-          or $!type ~~ Message && $value !~~ Message
-	{ die "type mismatch" }
-	else { $!value = $value }
-      }
-      method encode returns blob8 {
-        given $!type {
-	  when Str&/ [u|s]?int[32|64] | bool | enum / {
-            return Varint.new($!number +< 3).blob ~ Varint.new($!value).blob
-          }
-          when "string"|Message {
-            my $payload = $!value.encode;
-            return Varint.new($!number +< 3 +| 2).blob ~
-            Varint.new($payload.elems).blob ~ $payload
-          }
-          default {...}
-        }
-      }
-    }
     my $label = $<label> ?? ~$<label> !! Str;
     my $name = ~$<fieldName>;
     my $number = +$<fieldNumber>;
@@ -212,9 +213,17 @@ sub wire-type(Str $type) is export {
 sub tag($field-number, $wire-type) { $field-number +< 3 +| $wire-type }
 
 class ProtoBuf is export {
-  has %.definitions handles <AT-KEY>;
   has Str $.proto-spec;
  
+  has %.definitions handles <AT-KEY>;
+  method EXISTS-KEY(Str $key) { %!definitions{$key}:exists }
+
+  method FALLBACK(Str $method where (self{$method}:exists)) {
+    my $definition = self{$method};
+    Proxy.new:
+      FETCH => method { $definition },
+      STORE => method (|) {...}
+  } 
   multi method new(Str $proto-spec) { self.bless: :$proto-spec }
   submethod TWEAK {
     use Google::ProtocolBuffers::Grammar;

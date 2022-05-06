@@ -25,20 +25,19 @@ message Msg {
 }
 PROTO-END
 
-my $i = ^100 .pick;
-my $msg = pb.definitions<Msg>;
-my $msg2 = pb.definitions<Msg2>;
+my $msg = pb.Msg;
+my $msg2 = pb.Msg2;
 
 lives-ok {
-  $msg.i = 57;
+  $msg.i = ^100 .pick;
   $msg.txt = "hello";
-  $msg2.j = 91;
+  $msg2.j = ^100 .pick;
   $msg.m = $msg2;
 }, "setting fields with correct types";
 
 dies-ok {
   $msg.i = "foo";
-  $msg.txt = 35;
+  $msg.txt = ^100 .pick;
   $msg2.j = "bar";
   $msg.m = pi;
 }, "dying when setting fields with incorrect types";
