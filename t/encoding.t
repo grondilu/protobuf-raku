@@ -41,7 +41,7 @@ dies-ok {
   $msg.txt = 35;
   $msg2.j = "bar";
   $msg.m = pi;
-}, "dying when setting fields with in-correct types";
+}, "dying when setting fields with incorrect types";
 
 lives-ok { $msg2.encode }, "encoding inner message";
 lives-ok { $msg.encode }, "encoding outer message";
