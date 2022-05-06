@@ -221,19 +221,4 @@ class ProtoBuf is export {
     else { die "unknown proto spec format" }
   }
   
-  method wire-type(Str $type) {
-    given $type {
-      when / [u|s]?int[32|64] | bool | enum / { return 0 }
-      when / s?fixed64 | double /             { return 1 }
-      when / s?fixed32 | float /              { return 5 }
-      when / string / or
-	self{$_}:exists && self{$_}<type> eq 'message'
-					      { return 2 }
-      default { !!! "unkown type $_" }
-    }
-  }
-  our proto encode($type, $ --> blob8) {*}
-  multi encode(Str $ where /^u?int[32|64]$/, UInt $value) { Varint.new($value).blob }
-  multi encode('string', Str $str) { Varint.new($str.chars).blob ~ $str.encode; }
-
 }
