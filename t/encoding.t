@@ -27,13 +27,17 @@ PROTO-END
 
 my $msg = pb.Msg;
 my $msg2 = pb.Msg2;
+my $msg3 = pb.Msg2;
 
 lives-ok {
   $msg.i = ^100 .pick;
   $msg.txt = "hello";
-  $msg2.j = ^100 .pick;
+  $msg2.j = ^1_000_000 .pick;
+  $msg3.j = ^1_000_000 .pick;
   $msg.m = $msg2;
 }, "setting fields with correct types";
+
+isnt $msg2.j, $msg3.j, "instanciation";
 
 dies-ok {
   $msg.i = "foo";
