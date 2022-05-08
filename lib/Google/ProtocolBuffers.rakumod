@@ -31,13 +31,14 @@ class Varint is export {
 
 multi decode(blob8 $b, *%params) {
   my Channel $c .= new;
-  LEAVE $c.close;
-  $c.send($_) for $b;
+  start { $c.send($_) for $b; $c.close }
   samewith $c, |%params;
 }
 multi decode(Channel $c) {
   my UInt ($sum, $i);
-  gather until $c.closed {
+  .rotor(2)
+  .map({Pair.new: |$_})
+  given gather until $c.closed {
     my $tag = Varint.new($c).Int;
     my ($field, $wire-type) = $tag +> 3, $tag +& 7;
     take $field;

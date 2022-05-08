@@ -7,12 +7,6 @@ for ^1_000_000_000_000 .pick(10) {
   is $_, Varint.new(blob => Varint.new($_).blob).Int, "$_ -> varint -> $_";
 }
 
-my ($field, $b) = Google::ProtocolBuffers::decode blob8.new:
-  <12 07 74 65 73 74 69 6e 67>.map: {:16($_)};
-is $field, 2, 'string example - field';
-is $b.decode('ascii'), 'testing', 'string example - string';
-
-
 constant pb = ProtoBuf.new: q:to/PROTO-END/;
 syntax = "proto3";
 message Msg {
@@ -25,7 +19,7 @@ message Msg {
 }
 PROTO-END
 
-say pb.encode: {
+.say for Google::ProtocolBuffers::decode pb.encode: {
   i   => 57,
   txt => "foo",
   m   => {
