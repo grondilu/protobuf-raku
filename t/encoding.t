@@ -25,6 +25,16 @@ message Msg {
 }
 PROTO-END
 
+say pb.encode: {
+  i   => 57,
+  txt => "foo",
+  m   => {
+    j => 122
+  }
+}, name => "Msg";
+
+=finish
+
 my $msg = pb.Msg;
 my $msg2 = pb.Msg2;
 my $msg3 = pb.Msg2;
