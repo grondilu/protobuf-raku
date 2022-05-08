@@ -1,7 +1,6 @@
 #!/usr/bin/env raku
 use Test;
 
-use Google::ProtocolBuffers;
 use Google::ProtocolBuffers::Grammar;
 
 subtest {
