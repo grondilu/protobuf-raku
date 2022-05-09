@@ -104,7 +104,7 @@ regex strFieldName { [ \' ~ \' <fieldName> ] | [ \" ~ \" <fieldName> ] }
 
 rule enum { enum <enumName> <enumBody> }
 rule enumBody { \{ [ <option> | <enumField> | <emptyStatement> ]* \} }
-rule enumField { <ident> '=' '-'? <intLit> [ \[ ~ \] [ <enumValueOption>+ % \, ] ]? \; }
+rule enumField { <ident> '=' $<enumValue> = ['-'? <.intLit>] [ \[ ~ \] [ <enumValueOption>+ % \, ] ]? \; }
 rule enumValueOption { <optionName> '=' <constant> }
 
 rule message { message <messageName> <messageBody> }

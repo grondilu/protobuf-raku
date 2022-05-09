@@ -6,7 +6,6 @@ our proto decode($, *%params) {*}
 class Varint is export {
 
   has blob8 $.blob;
-
   multi method new(Channel $c) {
     my @b;
     until $c.closed {
@@ -37,8 +36,8 @@ multi decode(blob8 $b, *%params) {
 multi decode(Channel $c) {
   my UInt ($sum, $i);
   .rotor(2)
-  .map({Pair.new: |$_})
-  given gather until $c.closed {
+  .map({Pair.new: |$_}) given
+  gather until $c.closed {
     my $tag = Varint.new($c).Int;
     my ($field, $wire-type) = $tag +> 3, $tag +& 7;
     take $field;
@@ -79,7 +78,10 @@ our class Compiler {
   method messageBody($/) {
     make %(
       fields => $<field>».made,
-      definitions => $<message>».made,
+      definitions => (
+	|$<message>».made,
+	|$<enum>».made
+      )
     )
   }
   method field($/) {
@@ -90,10 +92,20 @@ our class Compiler {
   }
   method fieldNumber($/) { make +$/ }
 
+  method enum($/)  {
+    make %(
+      :name($<enumName>.made),
+      :type<enum>,
+      :hash(Hash.new: $<enumBody><enumField>».made),
+    )
+  }
+  method enumName($/)  { make ~$/ }
+  method enumField($/) { make Pair.new: ~$<ident>, +$<enumValue> }
+
   # TODO
   method package($/) {...}
   method oneof($/) {...}
-  method enum($/)  {...}
+
 }
 
 our package ZigZag {
@@ -104,7 +116,8 @@ our package ZigZag {
 class ProtoBuf is export {
   has Str $.proto-spec;
   has %!made;
- 
+
+
   multi method new(Str $proto-spec) { self.bless: :$proto-spec }
   submethod TWEAK {
     use Google::ProtocolBuffers::Grammar;
@@ -117,11 +130,26 @@ class ProtoBuf is export {
     { %!made = $/.made }
     else { die "unknown proto spec format" }
   }
-  multi method encode(%hash, Str :$name, :@definitions = %!made<definitions> --> blob8) {
-    my %definitions = @definitions.grep({.<type> eq 'message'}).classify(*<name>);
-    die "unknown message '$name'" unless %definitions{$name}:exists;
+
+  sub look-up(Str $name, *@definitions) {
+    my @look-ups = @definitions.map: *.classify({.<name>});
+    die "could not look up '$name'" unless
+      my %definitions = @look-ups.first({$_{$name}:exists});
     die "duplicate definition"    if %definitions{$name} > 1;
-    my $definition = %definitions{$name}.shift;
+    return %definitions{$name}.shift;
+  }
+ 
+  # enum encoding
+  multi method encode(Str $str, Str :$name, :@definitions = [ %!made<definitions> ] --> blob8) {
+    my $definition = look-up $name, |@definitions;
+    die "$name is not an enum, so it can't be initialized by a string" unless $definition<type> eq 'enum';
+    return Varint.new($definition<hash>{$str}).blob;
+  }
+    
+  # message encoding
+  multi method encode(%hash, Str :$name, :@definitions = [ %!made<definitions> ] --> blob8) {
+    my $definition = look-up $name, |@definitions;
+    die "$name is not a message, so it can't be initialized by a hash" unless $definition<type> eq 'message';
     my %fields = $definition<body><fields>.classify(*<name>);
     [~] gather for %hash.kv -> $key, $value {
       die "unknown field $key" unless %fields{$key} == 1;
@@ -129,19 +157,27 @@ class ProtoBuf is export {
       given $field<type> {
         when /^<[su]>?int[32|64]$/ {
 	  die "integer value was expected for field '$key'" unless $value ~~ Int;
-          take blob8.new($field<number> +< 3) ~ Varint.new($value).blob;
+          take Varint.new($field<number> +< 3).blob ~ Varint.new($value).blob;
 	}
         when "string" {
 	  die "string value was expected for field '$key'"  unless $value ~~ Str;
           my $encoded-string = blob8.new: $value.encode;
-          take blob8.new($field<number> +< 3 +| 2) ~ blob8.new($encoded-string.elems) ~ $encoded-string;
+          take Varint.new($field<number> +< 3 +| 2).blob ~ Varint.new($encoded-string.elems).blob ~ $encoded-string;
 	}
         default {
           my $msg;
-          try $msg = samewith $value, :name($_), :definitions($definition<body><definitions>);
-          try $msg = samewith $value, :name($_), :@definitions if $!;
-          die "could not make submessage $key of type $_" if $!;
-          take blob8.new($field<number> +< 3 +| 2, $msg.elems) ~ $msg;
+          try $msg = samewith $value, :name($_),
+             definitions => [ $definition<body><definitions> ].append([@definitions]);
+          die "could not encode field $key of type $_ : $!" if $!; 
+          given $value {
+            when Hash {
+	      take Varint.new($field<number> +< 3 +| 2).blob ~
+                   Varint.new($msg.elems).blob ~
+                   $msg;
+            }
+            when Str { take Varint.new($field<number> +< 3).blob ~ $msg; }
+            default { die "unknow value type" }
+          }
 	}
       }
     }
