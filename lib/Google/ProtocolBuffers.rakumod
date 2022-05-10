@@ -78,9 +78,10 @@ our class Compiler {
   method messageBody($/) {
     make %(
       fields => $<field>».made,
+      oneofs => $<oneof>».made,
       definitions => (
 	|$<message>».made,
-	|$<enum>».made
+	|$<enum>».made,
       )
     )
   }
@@ -102,9 +103,23 @@ our class Compiler {
   method enumName($/)  { make ~$/ }
   method enumField($/) { make Pair.new: ~$<ident>, +$<enumValue> }
 
+  method oneof($/) {
+    make %(
+      :name($<oneofName>.made)
+      :type<oneof>,
+      :fields($<oneofField>».made)
+    )
+  }
+  method oneofName($/) { make ~$/ }
+  method oneofField($/) {
+    make %(
+      :type(~$<type>),
+      :name(~$<fieldName>),
+      :number(+$<fieldNumber>)
+    )
+  }
   # TODO
   method package($/) {...}
-  method oneof($/) {...}
 
 }
 
@@ -139,21 +154,30 @@ class ProtoBuf is export {
     return %definitions{$name}.shift;
   }
  
-  # enum encoding
-  multi method encode(Str $str, Str :$name, :@definitions = [ %!made<definitions> ] --> blob8) {
-    my $definition = look-up $name, |@definitions;
-    die "$name is not an enum, so it can't be initialized by a string" unless $definition<type> eq 'enum';
-    return Varint.new($definition<hash>{$str}).blob;
-  }
-    
   # message encoding
-  multi method encode(%hash, Str :$name, :@definitions = [ %!made<definitions> ] --> blob8) {
+  multi method encode(%hash, Str :$name, :@definitions = (%!made<definitions>,) --> blob8) {
     my $definition = look-up $name, |@definitions;
     die "$name is not a message, so it can't be initialized by a hash" unless $definition<type> eq 'message';
     my %fields = $definition<body><fields>.classify(*<name>);
-    [~] gather for %hash.kv -> $key, $value {
-      die "unknown field $key" unless %fields{$key} == 1;
-      my $field = %fields{$key}.pick;
+    my %oneofs = $definition<body><oneofs>.classify(*<name>);
+    [~] gather for %hash.pairs -> $pair {
+      my ($key, $value) = $pair.kv;
+      die "'$key' defined both as a oneof and normal field" if (%fields,%oneofs).all{$key}:exists;
+      my $field;
+      if %fields{$key}:exists {
+	die "duplicated field '$key'" if %fields{$key} > 1;
+	$field = %fields{$key}.pick;
+      } elsif %oneofs{$key}:exists {
+        die "duplicated oneof '$key'" if %oneofs{$key} > 1;
+        my $oneof = %oneofs{$key}.pick;
+	with $oneof<fields>.classify(*<name>){$value.key} {
+          die "duplicate oneof field '{$value.key}'" if .elems > 1;
+          $field = .pick;
+        } else { die "unkown oneof field '{$value.key}'" }
+        die "unexpected value format for oneof entry" unless $value ~~ Pair;
+        ($key, $value) = $value.kv;
+      } else { die "unknown (oneof)field '$key'" }
+
       given $field<type> {
         when /^<[su]>?int[32|64]$/ {
 	  die "integer value was expected for field '$key'" unless $value ~~ Int;
@@ -165,19 +189,20 @@ class ProtoBuf is export {
           take Varint.new($field<number> +< 3 +| 2).blob ~ Varint.new($encoded-string.elems).blob ~ $encoded-string;
 	}
         default {
-          my $msg;
-          try $msg = samewith $value, :name($_),
-             definitions => [ $definition<body><definitions> ].append([@definitions]);
-          die "could not encode field $key of type $_ : $!" if $!; 
-          given $value {
-            when Hash {
-	      take Varint.new($field<number> +< 3 +| 2).blob ~
-                   Varint.new($msg.elems).blob ~
-                   $msg;
+          my $definition = look-up $_, |
+          my @definitions = $OUTERS::definition<body><definitions>, |@OUTERS::definitions;
+          given $definition<type> {
+            when 'message' {
+              my $msg = samewith $value, :name($_), |@definitions;
+              take Varint.new($field<number> +< 3 +| 2).blob ~
+                   Varint.new($msg.elems).blob ~ $msg;
             }
-            when Str { take Varint.new($field<number> +< 3).blob ~ $msg; }
-            default { die "unknow value type" }
-          }
+            when 'enum' {
+              take Varint.new($field<number> +< 3).blob ~
+                   Varint.new($definition<hash>{$value}).blob
+            }
+            default { die "unknown type '{$definition<type>}'" }
+	  }
 	}
       }
     }
