@@ -100,7 +100,7 @@ rule reserved { reserved [ <ranges> | <strFieldNames> ] \; }
 rule ranges { <range>+ % \, }
 rule range { <intLit> [ to [ <intLit> | max ] ]? }
 rule strFieldNames { <strFieldName>+ % \, }
-regex strFieldName { [ \' ~ \' <fieldName> ] | [ \" ~ \" <fieldName> ] }
+regex strFieldName { (<['"]>) ~ $0 <fieldName> }
 
 rule enum { enum <enumName> <enumBody> }
 rule enumBody { \{ [ <option> | <enumField> | <emptyStatement> ]* \} }
